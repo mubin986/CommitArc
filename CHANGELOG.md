@@ -1,3 +1,12 @@
+# [1.3.0](https://github.com/mubin986/CommitArc/compare/v1.2.0...v1.3.0) (2026-06-19)
+
+
+### Features
+
+* **report:** add in-app report editor with AI revise ([3c1f25e](https://github.com/mubin986/CommitArc/commit/3c1f25e91eb73cc56b9a30b0375aad1ea5c0af58))
+
+
+
 # [1.2.0](https://github.com/mubin986/CommitArc/compare/v1.1.0...v1.2.0) (2026-06-19)
 
 
