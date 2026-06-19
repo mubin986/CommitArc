@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CommitArc — commit history → AI reports</title>
+    <meta
+      name="description"
+      content="Analyze a GitHub repo's commit history and generate technical, client-presentation, or product-demo AI reports with Claude — edit, present as slides, export, and publish."
+    />
+    <meta property="og:title" content="CommitArc" />
+    <meta
+      property="og:description"
+      content="Turn commit history into reports your client actually reads."
+    />
+    <style>
+      :root {
+        --bg: #0a0a0f;
+        --panel: #0f1117;
+        --border: #1f2937;
+        --text: #cbd2dc;
+        --text-strong: #f3f4f6;
+        --muted: #8b94a3;
+        --sky: #0ea5e9;
+        --indigo: #6366f1;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            1200px 600px at 90% -10%,
+            rgba(14, 165, 233, 0.14),
+            transparent 60%
+          ),
+          radial-gradient(
+            900px 500px at -10% 10%,
+            rgba(99, 102, 241, 0.12),
+            transparent 60%
+          ),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.6;
+      }
+      a {
+        color: var(--sky);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .wrap {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 0;
+      }
+      .brand {
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--text-strong);
+        letter-spacing: -0.02em;
+      }
+      .brand span {
+        color: var(--sky);
+      }
+      .btn {
+        display: inline-block;
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        color: var(--text-strong);
+      }
+      .btn:hover {
+        text-decoration: none;
+        border-color: #475569;
+      }
+      .btn.primary {
+        background: linear-gradient(135deg, var(--sky), var(--indigo));
+        border: none;
+        color: #fff;
+      }
+      .hero {
+        padding: 56px 0 40px;
+      }
+      .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--sky);
+        margin: 0 0 16px;
+      }
+      h1 {
+        font-size: clamp(2.2rem, 6vw, 3.6rem);
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        color: var(--text-strong);
+        margin: 0 0 18px;
+        font-weight: 800;
+      }
+      .lede {
+        font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+        color: var(--muted);
+        max-width: 640px;
+        margin: 0 0 28px;
+      }
+      .cta {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .note {
+        margin-top: 18px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      section {
+        padding: 36px 0;
+      }
+      h2 {
+        font-size: 1.5rem;
+        color: var(--text-strong);
+        letter-spacing: -0.01em;
+        margin: 0 0 20px;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+      .card {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 14px;
+        padding: 18px;
+      }
+      .card h3 {
+        margin: 0 0 6px;
+        color: var(--text-strong);
+        font-size: 1.05rem;
+      }
+      .card p {
+        margin: 0;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+      .types .card {
+        border-top: 3px solid var(--sky);
+      }
+      pre {
+        background: #11131a;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        overflow-x: auto;
+        color: #e5e7eb;
+        font-size: 13px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      footer {
+        border-top: 1px solid var(--border);
+        margin-top: 40px;
+        padding: 28px 0 48px;
+        color: var(--muted);
+        font-size: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        justify-content: space-between;
+      }
+      .links a {
+        margin-right: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="brand">Commit<span>Arc</span></div>
+        <a class="btn" href="https://github.com/mubin986/CommitArc">GitHub ↗</a>
+      </header>
+
+      <div class="hero">
+        <p class="eyebrow">Commit history → AI reports</p>
+        <h1>Turn commit history into reports your client actually reads.</h1>
+        <p class="lede">
+          CommitArc analyzes a GitHub repo over a date range or up to a tag, then
+          generates a technical engineering report, a client presentation, or a
+          punchy product demo with Claude — edit it, present it as slides, export
+          to PPTX/PDF, and publish to a Gist, Wiki, or Release.
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="#quickstart">Run it locally</a>
+          <a class="btn" href="https://github.com/mubin986/CommitArc"
+            >View source</a
+          >
+        </div>
+        <p class="note">
+          CommitArc is a local-first tool (it uses your <code>gh</code> CLI and
+          local Claude session), so it runs on your machine — this page is just
+          the landing page.
+        </p>
+      </div>
+
+      <section>
+        <h2>What it does</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Analyze any repo</h3>
+            <p>
+              Public or private (via <code>gh</code>). Date range or
+              base→tag. Commits, diff stats, and per-contributor activity — no AI
+              call needed.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Generate on demand</h3>
+            <p>
+              Spend AI tokens only when you want a report. Local Claude, an API
+              key, or a key you paste — your choice of model.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Edit like Notion</h3>
+            <p>
+              A block editor with slash commands, drag-to-reorder, and an AI
+              "revise with an instruction" — fullscreen focus mode included.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Present &amp; export</h3>
+            <p>
+              Fullscreen slide deck in a new window, plus Markdown, PowerPoint
+              (.pptx), and print-to-PDF.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Publish</h3>
+            <p>
+              Push a report to a secret Gist (shareable link), the repo Wiki, or
+              a draft Release — all via <code>gh</code>, confirm-gated.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Saved history</h3>
+            <p>
+              Every analysis is stored locally; re-open, filter, and re-generate
+              any report later.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Three report types</h2>
+        <div class="grid types">
+          <div class="card">
+            <h3>🛠 Technical report</h3>
+            <p>
+              Engineering summary: themes, notable commits, contributor activity,
+              risks.
+            </p>
+          </div>
+          <div class="card">
+            <h3>📊 Client presentation</h3>
+            <p>
+              Non-technical, feature-focused briefing for stakeholders — as a
+              slide deck.
+            </p>
+          </div>
+          <div class="card">
+            <h3>📖 Product demo</h3>
+            <p>
+              A punchy demo script: agenda, per-feature slides with "show" cues,
+              and value.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="quickstart">
+        <h2>Quickstart</h2>
+        <pre>git clone https://github.com/mubin986/CommitArc.git
+cd CommitArc
+npm install
+cp .env.example .env.local   # optional keys
+npm run dev                  # http://localhost:3000</pre>
+        <p class="note">
+          Requires Node.js 20+. For private repos, log in to the GitHub CLI
+          (<code>gh auth login</code>); for AI reports, log in to the Claude CLI
+          or set <code>ANTHROPIC_API_KEY</code> (or paste a key in the app).
+        </p>
+      </section>
+
+      <footer>
+        <div>
+          Built with Next.js, React, and Claude · MIT licensed.
+        </div>
+        <div class="links">
+          <a href="https://github.com/mubin986/CommitArc">Repo</a>
+          <a href="https://github.com/mubin986/CommitArc/issues">Issues</a>
+          <a href="https://github.com/mubin986/CommitArc/discussions"
+            >Discussions</a
+          >
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
