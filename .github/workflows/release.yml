@@ -35,6 +35,10 @@ jobs:
           skip-version-file: "false"
           skip-on-empty: "true"
           tag-prefix: "v"
+          # [skip ci] keeps the changelog commit from re-triggering this workflow.
+          git-message: "chore(release): {version} [skip ci]"
+          git-user-name: github-actions[bot]
+          git-user-email: github-actions[bot]@users.noreply.github.com
 
       - name: Create draft GitHub Release
         if: ${{ steps.changelog.outputs.skipped == 'false' }}

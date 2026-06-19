@@ -15,10 +15,13 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
+    "@blocknote/core": "^0.51.4",
+    "@blocknote/mantine": "^0.51.4",
+    "@blocknote/react": "^0.51.4",
     "next": "^16.2.9",
     "pptxgenjs": "^4.0.1",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },

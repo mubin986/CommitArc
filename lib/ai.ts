@@ -215,7 +215,7 @@ const thinkingParams = (model: string) =>
 
 /** Raw body for the local OAuth path (system marker + report prompt). */
 function localRequestBody(
-  input: SummaryInput,
+  userContent: string,
   model: string,
   stream: boolean,
   system: string,
@@ -229,17 +229,17 @@ function localRequestBody(
       { type: "text", text: CC_SYSTEM_MARKER },
       { type: "text", text: system },
     ],
-    messages: [{ role: "user", content: buildUserPrompt(input) }],
+    messages: [{ role: "user", content: userContent }],
   };
 }
 
-function apiParams(input: SummaryInput, model: string, system: string) {
+function apiParams(userContent: string, model: string, system: string) {
   return {
     model,
     max_tokens: MAX_TOKENS,
     ...thinkingParams(model),
     system,
-    messages: [{ role: "user" as const, content: buildUserPrompt(input) }],
+    messages: [{ role: "user" as const, content: userContent }],
   };
 }
 
@@ -271,8 +271,8 @@ const oauthHeaders = (token: string) => ({
 // Streaming generators (yield text deltas)
 // ---------------------------------------------------------------------------
 
-async function* summaryStreamViaLocal(
-  input: SummaryInput,
+async function* streamViaLocal(
+  userContent: string,
   model: string,
   system: string,
 ): AsyncGenerator<string> {
@@ -280,7 +280,7 @@ async function* summaryStreamViaLocal(
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
     headers: oauthHeaders(token),
-    body: JSON.stringify(localRequestBody(input, model, true, system)),
+    body: JSON.stringify(localRequestBody(userContent, model, true, system)),
   });
   if (!res.ok || !res.body) {
     const text = res.ok ? "" : await res.text().catch(() => "");
@@ -324,14 +324,14 @@ async function* summaryStreamViaLocal(
   }
 }
 
-async function* summaryStreamViaApiKey(
-  input: SummaryInput,
+async function* streamViaApiKey(
+  userContent: string,
   apiKey: string,
   model: string,
   system: string,
 ): AsyncGenerator<string> {
   const client = new Anthropic({ apiKey });
-  const stream = client.messages.stream(apiParams(input, model, system));
+  const stream = client.messages.stream(apiParams(userContent, model, system));
   for await (const event of stream) {
     if (
       event.type === "content_block_delta" &&
@@ -342,18 +342,61 @@ async function* summaryStreamViaApiKey(
   }
 }
 
-export async function* generateSummaryStream(
-  input: SummaryInput,
+async function* streamCompletion(
+  system: string,
+  userContent: string,
   opts: GenerateOptions,
 ): AsyncGenerator<string> {
   const model = resolveModel(opts.model);
-  const system = systemFor(opts.reportType);
   if (opts.provider === "local") {
-    yield* summaryStreamViaLocal(input, model, system);
+    yield* streamViaLocal(userContent, model, system);
     return;
   }
   if (!opts.apiKey) {
     throw new Error("An Anthropic API key is required for the API-key provider.");
   }
-  yield* summaryStreamViaApiKey(input, opts.apiKey, model, system);
+  yield* streamViaApiKey(userContent, opts.apiKey, model, system);
+}
+
+export async function* generateSummaryStream(
+  input: SummaryInput,
+  opts: GenerateOptions,
+): AsyncGenerator<string> {
+  yield* streamCompletion(systemFor(opts.reportType), buildUserPrompt(input), opts);
+}
+
+function reviseSystem(reportType?: ReportType): string {
+  const kind =
+    reportType === "technical"
+      ? "technical engineering report"
+      : reportType === "demo"
+        ? "client-facing product-demo deck"
+        : reportType === "presentation"
+          ? "client-facing presentation"
+          : "report";
+  const audience =
+    reportType === "technical"
+      ? "Keep it technical and precise."
+      : "Keep it non-technical and client-facing — no engineering jargon, no commit SHAs or file names.";
+  return `You are editing an existing ${kind} written in GitHub-flavored Markdown. Apply the user's instruction and return the FULL revised report.
+
+Rules:
+- Apply only what the instruction asks; preserve everything else and keep the facts intact — do not invent features or details.
+- Keep the Markdown slide structure (\`##\` / \`###\` headings) unless the instruction explicitly says to change it.
+- ${audience}
+- Output ONLY the revised report Markdown — no preamble, no explanation, no surrounding code fences.`;
+}
+
+export interface ReviseInput {
+  currentText: string;
+  instruction: string;
+  reportType?: ReportType;
+}
+
+export async function* generateRevisionStream(
+  input: ReviseInput,
+  opts: GenerateOptions,
+): AsyncGenerator<string> {
+  const user = `Instruction:\n${input.instruction}\n\nCurrent report (GitHub-flavored Markdown):\n\n${input.currentText}`;
+  yield* streamCompletion(reviseSystem(input.reportType), user, opts);
 }

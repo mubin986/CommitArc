@@ -21,6 +21,7 @@ Analyze a GitHub repository's commit history over a **date range** or **up to a 
 - **Branch / tag picker:** click *Fetch branches & tags* to load the repo's refs; the branch and tag fields become autocomplete dropdowns (free-text still allowed).
 - **Live progress (SSE):** analysis streams Server-Sent Events (fetch phases + per-commit stat progress), and report generation streams the **AI report token-by-token** as it's written.
 - **Persistent history:** every analysis is saved server-side to a gitignored `data/history/` folder (one JSON per run). Re-enter a repo to see its previous runs inline, or open the **History** page to browse/filter all past analyses (by repo, by mode) and re-open any report instantly.
+- **Edit in-app:** open any report in a **Notion-style block editor** (BlockNote — slash commands, drag-to-reorder, inline formatting toolbar), or **AI-revise** it with a plain-language instruction (e.g. "make it more concise", "lead with certificates") that rewrites it in place. Edits save back to the record and flow straight into export/present/publish.
 - **Export:** any report → **Markdown** or **Print / Save-as-PDF**; the client presentation and demo also export to **PowerPoint (.pptx)**.
 - **Publish (via `gh`):** push a report to a **secret/public Gist** (shareable link, no repo access needed), the **repo Wiki** (best for the technical report), or append it to a **draft Release** for a tag. Each action confirms first, since it writes to GitHub.
 - **Multi-page app:** a home page to configure a run, a dedicated `/analyze` page that streams the result, and `/history` + `/history/[id]` for browsing saved reports — with a sticky top nav.
@@ -132,8 +133,8 @@ app/
   api/ai-status/route.ts   GET  → { local availability, env key present, models }
   api/analyze/route.ts     POST → SSE (analysis only): phase / repo / stats_progress
                            / partial / done / error  (no AI)
-  api/report/route.ts      POST → SSE: ai_start / ai_delta / ai_done / error,
-                           then attaches the report to the record
+  api/report/route.ts      POST → SSE generate (attaches) OR revise (instruction,
+                           streams only) · PUT → save an edited report
   api/refs/route.ts        POST → { branches[], tags[] }
   api/publish/route.ts     POST → publish a report to a Gist / Wiki / Release (gh)
   api/history/route.ts     GET list (summaries) · POST save · DELETE clear all
@@ -144,6 +145,7 @@ components/
   ProgressPanel.tsx        Spinner + phase log + stats progress bar
   AiSettings.tsx           Provider + model picker (used at generation time)
   RecordView.tsx           Analysis + tabbed per-type report generation + export
+  ReportEditor.tsx         Notion-style block editor (BlockNote) + AI revise
   PublishMenu.tsx          Publish popover (Gist / Wiki / Release)
   Deck.tsx                 Polished slide deck (cover, progress bar, fullscreen)
 lib/
@@ -186,6 +188,15 @@ On every push to `main`, the [release workflow](.github/workflows/release.yml) �
 - Unauthenticated GitHub REST is rate-limited to ~60 req/hour. Add `GITHUB_TOKEN` or use the `gh` path to avoid it.
 - The AI report is grounded in the commit data passed to it (up to 400 commits in the prompt); for very large ranges it summarizes from the sample and says so.
 - History is stored on disk under `data/` (gitignored). On an ephemeral/serverless host it won't persist; this app is designed to run locally or on a persistent host.
+
+## Contributing
+
+Issues and pull requests are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**
+for local setup and the workflow.
+
+- 🐛 [Report a bug](../../issues/new?template=bug_report.yml) · 💡 [Request a feature](../../issues/new?template=feature_request.yml) · 💬 [Discussions](../../discussions) · 🔒 [Security policy](SECURITY.md)
+- Please follow the [Code of Conduct](CODE_OF_CONDUCT.md) and
+  [Conventional Commits](https://www.conventionalcommits.org/).
 
 ## License
 

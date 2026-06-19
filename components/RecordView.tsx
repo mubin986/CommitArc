@@ -3,8 +3,16 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import dynamic from "next/dynamic";
 import AiSettings from "./AiSettings";
 import PublishMenu from "./PublishMenu";
+
+const ReportEditor = dynamic(() => import("./ReportEditor"), {
+  ssr: false,
+  loading: () => (
+    <p className="text-sm text-[var(--text-muted)]">Loading editor…</p>
+  ),
+});
 import { exportMarkdownFor } from "@/lib/exportReport";
 import { exportPptx } from "@/lib/exportPptx";
 import { useReportStream } from "@/lib/useReportStream";
@@ -56,6 +64,7 @@ export default function RecordView({
   const [active, setActive] = useState<ReportType>(
     hasTech ? "technical" : hasPres ? "presentation" : hasDemo ? "demo" : "technical",
   );
+  const [editing, setEditing] = useState(false);
 
   const report = useReportStream(record.id, (_type, ok) => {
     if (ok) onRefresh();
@@ -138,7 +147,10 @@ export default function RecordView({
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setActive(t.id)}
+                  onClick={() => {
+                    setActive(t.id);
+                    setEditing(false);
+                  }}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
                     isActive
                       ? "bg-sky-500/10 text-sky-400"
@@ -169,6 +181,20 @@ export default function RecordView({
         )}
 
         <div className="p-5">
+          {editing && content ? (
+            <ReportEditor
+              recordId={record.id}
+              reportType={active}
+              initialText={content.text}
+              ai={ai}
+              onSaved={() => {
+                setEditing(false);
+                onRefresh();
+              }}
+              onCancel={() => setEditing(false)}
+            />
+          ) : (
+            <>
           {/* Actions */}
           <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-[var(--text-faint)]">
@@ -176,8 +202,8 @@ export default function RecordView({
                 <span className="animate-pulse text-sky-400">
                   ● generating…
                 </span>
-              ) : content?.model ? (
-                `${content.model} · ${new Date(content.generatedAt).toLocaleString()}`
+              ) : content ? (
+                `${content.model ? content.model + " · " : ""}${new Date(content.editedAt ?? content.generatedAt).toLocaleString()}${content.edited ? " · edited" : ""}`
               ) : (
                 ""
               )}
@@ -227,6 +253,13 @@ export default function RecordView({
                     className="rounded-lg border border-[var(--border)] bg-[var(--inset)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition hover:border-sky-500"
                   >
                     Print / Save PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--inset)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition hover:border-sky-500"
+                  >
+                    ✎ Edit
                   </button>
                   <button
                     type="button"
@@ -305,6 +338,8 @@ export default function RecordView({
                     }`}
               </button>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

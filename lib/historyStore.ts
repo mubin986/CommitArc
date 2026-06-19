@@ -184,6 +184,23 @@ function prune(): void {
   }
 }
 
+/** Save an edited report text (manual or AI-assisted) onto a record. */
+export function updateReportText(
+  id: string,
+  reportType: ReportType,
+  text: string,
+): HistoryRecord | null {
+  const rec = getRecord(id);
+  if (!rec) return null;
+  const content = rec.result.reports[reportType];
+  if (!content) return null;
+  content.text = text;
+  content.edited = true;
+  content.editedAt = Date.now();
+  fs.writeFileSync(fileFor(id), JSON.stringify(rec));
+  return rec;
+}
+
 /** Record where a report was published (one link per target — replaces same). */
 export function addPublishedLink(
   id: string,

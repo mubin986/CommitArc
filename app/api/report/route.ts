@@ -1,7 +1,15 @@
-import { generateSummaryStream, type AiProvider } from "@/lib/ai";
-import { attachReport, getRecord } from "@/lib/historyStore";
+import {
+  generateRevisionStream,
+  generateSummaryStream,
+  type AiProvider,
+} from "@/lib/ai";
+import {
+  attachReport,
+  getRecord,
+  updateReportText,
+} from "@/lib/historyStore";
 import { readClaudeCredentials } from "@/lib/claudeCreds";
-import type { ReportRequest } from "@/lib/types";
+import type { ReportRequest, ReportType } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,24 +80,37 @@ export async function POST(request: Request) {
           return;
         }
 
+        const isRevise = Boolean(body.instruction?.trim());
+        const aiOpts = {
+          provider: ai.provider,
+          apiKey: ai.apiKey,
+          model: body.model ?? "",
+          reportType: body.reportType,
+        };
+
         send("ai_start", {});
         let acc = "";
         try {
-          for await (const delta of generateSummaryStream(
-            {
-              repo: rec.result.repo,
-              rangeLabel: rec.result.rangeLabel,
-              stats: rec.result.stats,
-              commits: rec.result.commits,
-              truncated: rec.result.truncated,
-            },
-            {
-              provider: ai.provider,
-              apiKey: ai.apiKey,
-              model: body.model ?? "",
-              reportType: body.reportType,
-            },
-          )) {
+          const gen = isRevise
+            ? generateRevisionStream(
+                {
+                  currentText: rec.result.reports[body.reportType]?.text ?? "",
+                  instruction: body.instruction!.trim(),
+                  reportType: body.reportType,
+                },
+                aiOpts,
+              )
+            : generateSummaryStream(
+                {
+                  repo: rec.result.repo,
+                  rangeLabel: rec.result.rangeLabel,
+                  stats: rec.result.stats,
+                  commits: rec.result.commits,
+                  truncated: rec.result.truncated,
+                },
+                aiOpts,
+              );
+          for await (const delta of gen) {
             acc += delta;
             send("ai_delta", { text: delta });
           }
@@ -98,11 +119,15 @@ export async function POST(request: Request) {
           return;
         }
 
-        attachReport(body.recordId, body.reportType, {
-          text: acc,
-          model: body.model ?? null,
-          generatedAt: Date.now(),
-        });
+        // Generation persists immediately; a revision streams to the editor and
+        // is saved explicitly by the user (PUT), so don't attach it here.
+        if (!isRevise) {
+          attachReport(body.recordId, body.reportType, {
+            text: acc,
+            model: body.model ?? null,
+            generatedAt: Date.now(),
+          });
+        }
         send("ai_done", {});
       } catch (e) {
         send("error", { message: (e as Error).message || "Unexpected error." });
@@ -121,4 +146,30 @@ export async function POST(request: Request) {
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+// Save an edited report (manual or AI-revised) onto the record.
+export async function PUT(request: Request) {
+  let body: { recordId?: string; reportType?: ReportType; text?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  if (
+    !body.recordId ||
+    !body.reportType ||
+    !["technical", "presentation", "demo"].includes(body.reportType) ||
+    typeof body.text !== "string"
+  ) {
+    return Response.json({ error: "Invalid edit request." }, { status: 400 });
+  }
+  const rec = updateReportText(body.recordId, body.reportType, body.text);
+  if (!rec) {
+    return Response.json(
+      { error: "Record or report not found." },
+      { status: 404 },
+    );
+  }
+  return Response.json({ ok: true });
 }

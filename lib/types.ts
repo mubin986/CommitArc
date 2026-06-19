@@ -26,6 +26,8 @@ export interface ReportRequest {
   aiProvider?: AiProviderChoice;
   apiKey?: string;
   model?: string;
+  /** When present, revise the existing report with this instruction instead of generating fresh. */
+  instruction?: string;
 }
 
 export interface AiSelection {
@@ -134,6 +136,8 @@ export interface ReportContent {
   model: string | null;
   generatedAt: number;
   published?: PublishedLink[];
+  edited?: boolean;
+  editedAt?: number;
 }
 
 export interface ReportSet {

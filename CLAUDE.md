@@ -34,13 +34,17 @@ Always run `npm run build` before committing — it type-checks the whole projec
 - `app/` — pages (`/`, `/analyze`, `/history`, `/history/[id]`, `/present/[id]`)
   and API routes.
   - `api/analyze` — SSE, **analysis only** (no AI): `phase` / `repo` / `stats_progress` / `partial` / `done` / `error`.
-  - `api/report` — SSE, generates one AI report (`?reportType`) and attaches it to the saved record.
+  - `api/report` — `POST` SSE generates a report (attaches it) or, with an
+    `instruction`, revises the existing one (streams only, no persist);
+    `PUT` saves an edited report onto the record.
   - `api/history`, `api/history/[id]` — server-side history CRUD.
   - `api/gh-status`, `api/ai-status`, `api/refs` — status/lookup helpers.
   - `api/publish` — pushes a report to a Gist / Wiki / Release via `gh` (+ `git`).
 - `components/` — `Nav`, `ConfigForm` (analysis-only form), `ProgressPanel`,
   `AiSettings` (provider+model picker, used at generation time), `RecordView`
-  (analysis + tabbed per-type report generation + export), `PublishMenu`
+  (analysis + tabbed per-type report generation + export), `ReportEditor`
+  (Notion-style block editor via BlockNote, with Markdown round-trip +
+  AI-revise), `PublishMenu`
   (Gist/Wiki/Release popover), `Deck` (standalone fullscreen slide deck, opened
   in a new window via `/present/[id]`).
 - `lib/` — `github.ts` (REST + `gh` CLI), `ai.ts` (technical/presentation/demo
