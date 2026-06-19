@@ -1,5 +1,6 @@
 "use client";
 
+import { REPO_URL } from "./branding";
 import { buildSlides } from "./slides";
 import type { ReportBody, ReportType, RepoMeta } from "./types";
 
@@ -131,6 +132,7 @@ export async function exportPptx(
     fontSize: 12,
     bold: true,
     color: "0F172A",
+    hyperlink: { url: REPO_URL },
   });
 
   // Content slides

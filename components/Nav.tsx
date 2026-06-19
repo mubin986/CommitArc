@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { REPO_URL } from "@/lib/branding";
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -54,6 +55,15 @@ export default function Nav() {
         <div className="flex items-center gap-1">
           {link("/", "New analysis")}
           {link("/history", "History")}
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="GitHub repository"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition hover:text-[var(--text-strong)]"
+          >
+            GitHub ↗
+          </a>
           <span className="ml-2">
             <ThemeToggle />
           </span>

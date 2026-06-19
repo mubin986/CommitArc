@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { buildSlides } from "@/lib/slides";
+import { REPO_URL } from "@/lib/branding";
 
 export default function Deck({
   title,
@@ -97,9 +98,15 @@ export default function Deck({
       </div>
 
       <div className="deck-chrome">
-        <span className="deck-brand">
+        <a
+          className="deck-brand"
+          href={REPO_URL}
+          target="_blank"
+          rel="noreferrer"
+          style={{ textDecoration: "none" }}
+        >
           Commit<span style={{ color: "#0ea5e9" }}>Arc</span>
-        </span>
+        </a>
         <div className="deck-controls">
           <button
             type="button"
