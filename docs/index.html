@@ -13,16 +13,66 @@
       property="og:description"
       content="Turn commit history into reports your client actually reads."
     />
+    <!-- Set theme before paint to avoid a flash of the wrong theme. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("commitarc-site-theme");
+          if (t === "light" || t === "dark")
+            document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
     <style>
       :root {
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --border: #e5e7eb;
+        --border-strong: #cbd5e1;
+        --text: #374151;
+        --text-strong: #0f172a;
+        --muted: #5b6573;
+        --code-bg: #f3f4f6;
+        --code-text: #1e293b;
+        --sky: #0284c7;
+        --indigo: #4f46e5;
+        --accent-a: rgba(14, 165, 233, 0.12);
+        --accent-b: rgba(99, 102, 241, 0.1);
+        color-scheme: light;
+      }
+      :root[data-theme="dark"] {
         --bg: #0a0a0f;
         --panel: #0f1117;
         --border: #1f2937;
+        --border-strong: #334155;
         --text: #cbd2dc;
         --text-strong: #f3f4f6;
         --muted: #8b94a3;
-        --sky: #0ea5e9;
-        --indigo: #6366f1;
+        --code-bg: #11131a;
+        --code-text: #e5e7eb;
+        --sky: #38bdf8;
+        --indigo: #818cf8;
+        --accent-a: rgba(14, 165, 233, 0.16);
+        --accent-b: rgba(99, 102, 241, 0.14);
+        color-scheme: dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0a0a0f;
+          --panel: #0f1117;
+          --border: #1f2937;
+          --border-strong: #334155;
+          --text: #cbd2dc;
+          --text-strong: #f3f4f6;
+          --muted: #8b94a3;
+          --code-bg: #11131a;
+          --code-text: #e5e7eb;
+          --sky: #38bdf8;
+          --indigo: #818cf8;
+          --accent-a: rgba(14, 165, 233, 0.16);
+          --accent-b: rgba(99, 102, 241, 0.14);
+          color-scheme: dark;
+        }
       }
       * {
         box-sizing: border-box;
@@ -33,16 +83,8 @@
       body {
         margin: 0;
         background:
-          radial-gradient(
-            1200px 600px at 90% -10%,
-            rgba(14, 165, 233, 0.14),
-            transparent 60%
-          ),
-          radial-gradient(
-            900px 500px at -10% 10%,
-            rgba(99, 102, 241, 0.12),
-            transparent 60%
-          ),
+          radial-gradient(1200px 600px at 90% -10%, var(--accent-a), transparent 60%),
+          radial-gradient(900px 500px at -10% 10%, var(--accent-b), transparent 60%),
           var(--bg);
         color: var(--text);
         font-family:
@@ -57,6 +99,15 @@
       }
       a:hover {
         text-decoration: underline;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.88em;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 0.05em 0.35em;
+        color: var(--code-text);
       }
       .wrap {
         max-width: 920px;
@@ -78,23 +129,41 @@
       .brand span {
         color: var(--sky);
       }
+      .hdr-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
       .btn {
         display: inline-block;
         border-radius: 10px;
-        padding: 10px 18px;
+        padding: 9px 16px;
         font-size: 14px;
         font-weight: 600;
         border: 1px solid var(--border);
         color: var(--text-strong);
+        background: var(--panel);
+        cursor: pointer;
+        font-family: inherit;
       }
       .btn:hover {
         text-decoration: none;
-        border-color: #475569;
+        border-color: var(--border-strong);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--muted);
+      }
+      .btn.ghost:hover {
+        color: var(--text-strong);
       }
       .btn.primary {
         background: linear-gradient(135deg, var(--sky), var(--indigo));
         border: none;
         color: #fff;
+      }
+      .btn.primary:hover {
+        opacity: 0.92;
       }
       .hero {
         padding: 56px 0 40px;
@@ -165,14 +234,22 @@
         border-top: 3px solid var(--sky);
       }
       pre {
-        background: #11131a;
+        background: var(--code-bg);
         border: 1px solid var(--border);
         border-radius: 12px;
         padding: 16px;
         overflow-x: auto;
-        color: #e5e7eb;
+        color: var(--code-text);
         font-size: 13px;
+        line-height: 1.55;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      pre code {
+        background: none;
+        border: none;
+        padding: 0;
+        color: inherit;
+        font-size: inherit;
       }
       footer {
         border-top: 1px solid var(--border);
@@ -194,7 +271,14 @@
     <div class="wrap">
       <header>
         <div class="brand">Commit<span>Arc</span></div>
-        <a class="btn" href="https://github.com/mubin986/CommitArc">GitHub ↗</a>
+        <div class="hdr-actions">
+          <button id="themeToggle" class="btn ghost" type="button">
+            🌙 Dark
+          </button>
+          <a class="btn" href="https://github.com/mubin986/CommitArc"
+            >GitHub ↗</a
+          >
+        </div>
       </header>
 
       <div class="hero">
@@ -225,9 +309,9 @@
           <div class="card">
             <h3>Analyze any repo</h3>
             <p>
-              Public or private (via <code>gh</code>). Date range or
-              base→tag. Commits, diff stats, and per-contributor activity — no AI
-              call needed.
+              Public or private (via <code>gh</code>). Date range or base→tag.
+              Commits, diff stats, and per-contributor activity — no AI call
+              needed.
             </p>
           </div>
           <div class="card">
@@ -297,11 +381,11 @@
 
       <section id="quickstart">
         <h2>Quickstart</h2>
-        <pre>git clone https://github.com/mubin986/CommitArc.git
+        <pre><code>git clone https://github.com/mubin986/CommitArc.git
 cd CommitArc
 npm install
 cp .env.example .env.local   # optional keys
-npm run dev                  # http://localhost:3000</pre>
+npm run dev                  # http://localhost:3000</code></pre>
         <p class="note">
           Requires Node.js 20+. For private repos, log in to the GitHub CLI
           (<code>gh auth login</code>); for AI reports, log in to the Claude CLI
@@ -310,9 +394,7 @@ npm run dev                  # http://localhost:3000</pre>
       </section>
 
       <footer>
-        <div>
-          Built with Next.js, React, and Claude · MIT licensed.
-        </div>
+        <div>Built with Next.js, React, and Claude · MIT licensed.</div>
         <div class="links">
           <a href="https://github.com/mubin986/CommitArc">Repo</a>
           <a href="https://github.com/mubin986/CommitArc/issues">Issues</a>
@@ -322,5 +404,30 @@ npm run dev                  # http://localhost:3000</pre>
         </div>
       </footer>
     </div>
+
+    <script>
+      (function () {
+        var tg = document.getElementById("themeToggle");
+        var mq = window.matchMedia("(prefers-color-scheme: dark)");
+        function current() {
+          var t = document.documentElement.getAttribute("data-theme");
+          if (t) return t;
+          return mq.matches ? "dark" : "light";
+        }
+        function render() {
+          tg.textContent = current() === "dark" ? "☀ Light" : "🌙 Dark";
+        }
+        tg.addEventListener("click", function () {
+          var next = current() === "dark" ? "light" : "dark";
+          document.documentElement.setAttribute("data-theme", next);
+          try {
+            localStorage.setItem("commitarc-site-theme", next);
+          } catch (e) {}
+          render();
+        });
+        mq.addEventListener("change", render);
+        render();
+      })();
+    </script>
   </body>
 </html>
