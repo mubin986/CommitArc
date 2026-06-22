@@ -136,6 +136,29 @@ it computes the next version from the commits, updates `CHANGELOG.md` and
 generated notes. Review and publish the draft manually. The bump only happens when
 there are releasable commits (`feat`/`fix`/breaking) since the last tag.
 
+## Landing page (GitHub Pages)
+
+The marketing/landing page is a single self-contained file, [docs/index.html](docs/index.html),
+served via GitHub Pages from the `docs/` folder on `main` (a push redeploys it).
+It is plain HTML + inline `<style>`/`<script>` — **no build step, no framework** —
+and mirrors `app/globals.css` theming with its own `--bg`/`--panel`/`--text`/…
+CSS variables and a light/dark toggle. Keep it dependency-free.
+
+**Keep it in sync with the product.** Whenever you ship something user-facing that
+changes what the app *does* — a new feature, a new report type, a new page/mode,
+or a notable capability — update `docs/index.html` in the same change so the
+landing page doesn't go stale. Typical touch points:
+
+- the hero `<meta name="description">` + lede paragraph,
+- the **What it does** feature grid (add/adjust a `.card`),
+- a dedicated `<section>` if the feature is large enough to explain (see the
+  campaigns and report-types sections as the pattern).
+
+Skip it for internal-only changes (refactors, deps, CI, tests, bug fixes with no
+visible behavior change). Landing-page-only edits are `docs:` commits (no release
+bump); when bundling the copy with the feature, the feature's `feat:` commit
+covers both.
+
 ## Don'ts
 
 - Don't commit `data/`, `.env*`, or secrets.
