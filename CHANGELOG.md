@@ -1,3 +1,12 @@
+# [1.4.0](https://github.com/mubin986/CommitArc/compare/v1.3.0...v1.4.0) (2026-06-22)
+
+
+### Features
+
+* **campaign:** add phased rollout campaigns from release tags ([c9dd346](https://github.com/mubin986/CommitArc/commit/c9dd34666f641ea3fcbbe5ef730da3b5d8334ecc))
+
+
+
 # [1.3.0](https://github.com/mubin986/CommitArc/compare/v1.2.0...v1.3.0) (2026-06-19)
 
 
