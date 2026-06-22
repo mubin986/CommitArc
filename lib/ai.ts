@@ -2,9 +2,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readClaudeCredentials } from "./claudeCreds";
 import type {
   CommitInfo,
+  PlannedMilestone,
   ReportStats,
   ReportType,
   RepoMeta,
+  TagTimeline,
 } from "./types";
 
 const MAX_COMMITS_IN_PROMPT = 400;
@@ -399,4 +401,157 @@ export async function* generateRevisionStream(
 ): AsyncGenerator<string> {
   const user = `Instruction:\n${input.instruction}\n\nCurrent report (GitHub-flavored Markdown):\n\n${input.currentText}`;
   yield* streamCompletion(reviseSystem(input.reportType), user, opts);
+}
+
+// ---------------------------------------------------------------------------
+// Campaign planning — cluster a tag timeline into themed milestones
+// ---------------------------------------------------------------------------
+
+/** Collect a non-streaming completion into a single string. */
+async function complete(
+  system: string,
+  user: string,
+  opts: GenerateOptions,
+): Promise<string> {
+  let out = "";
+  for await (const delta of streamCompletion(system, user, opts)) out += delta;
+  return out;
+}
+
+const GROUPING_SYSTEM_PROMPT = `You are a delivery manager planning how to present a finished software project to a non-technical CLIENT as a phased rollout. The work is already done and tagged as a sequence of releases. Your job is to group those release tags into a handful of coherent MILESTONES that can each be shown to the client as a believable chunk of progress.
+
+You are given the repository's tags in chronological order (oldest first), each with the work delivered up to that tag.
+
+Group the tags into milestones following these HARD rules:
+- Milestones must be CONTIGUOUS and NON-OVERLAPPING, and together they must cover ALL tags in chronological order. Each tag belongs to exactly one milestone; never reorder tags.
+- Each milestone is a run of one or more ADJACENT tags. Put a seam where the theme of the work shifts (e.g. foundation → core feature → polish), so each milestone tells a self-contained story.
+- Aim for roughly the requested number of milestones, balancing them so no single milestone is hugely larger than the others.
+- Give each milestone a short, client-facing TITLE describing the theme in plain language (NO version numbers, NO jargon — e.g. "Account & Sign-in", "Core Booking Flow", "Reporting & Insights").
+- Give each milestone a 1-2 sentence SUMMARY of what the client gets, in non-technical, benefit-oriented language.
+
+Output ONLY valid JSON (no prose, no code fences) of the exact shape:
+{"milestones":[{"title":"...","summary":"...","tags":["v0.1","v0.2"]}]}
+The "tags" arrays, concatenated in order, must equal the full input tag list.`;
+
+function buildGroupingPrompt(
+  repo: RepoMeta,
+  timeline: TagTimeline,
+  target: number,
+): string {
+  const lines: string[] = [];
+  lines.push(`Repository: ${repo.fullName}`);
+  if (repo.description) lines.push(`Description: ${repo.description}`);
+  lines.push(`Total tags: ${timeline.tags.length}`);
+  lines.push(`Requested number of milestones: ~${target}`);
+  if (timeline.truncated) {
+    lines.push(
+      "Note: the tag/commit list was truncated; group the tags shown below.",
+    );
+  }
+  lines.push("");
+  lines.push("Tags (oldest first), with the work delivered up to each:");
+  for (const t of timeline.tags) {
+    const date = t.date ? ` (${t.date.slice(0, 10)})` : "";
+    lines.push(`- ${t.name}${date}`);
+    for (const s of t.subjects) lines.push(`    • ${s}`);
+    if (t.subjects.length === 0) lines.push("    • (no commit detail available)");
+  }
+  return lines.join("\n");
+}
+
+function parseJsonObject(raw: string): unknown {
+  let s = raw.trim();
+  // Strip code fences if the model wrapped the JSON.
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  const first = s.indexOf("{");
+  const last = s.lastIndexOf("}");
+  if (first === -1 || last === -1 || last < first) {
+    throw new Error("AI did not return JSON for the milestone plan.");
+  }
+  return JSON.parse(s.slice(first, last + 1));
+}
+
+/** Default milestone count for a tag list: ~1 per 4 tags, clamped to 3–10. */
+export function defaultMilestoneCount(tagCount: number): number {
+  return Math.max(3, Math.min(10, Math.round(tagCount / 4)));
+}
+
+/**
+ * Ask the model to cluster the tag timeline into contiguous milestones, then
+ * normalize the result into ranges (baseTag/headTag) we can analyze later.
+ */
+export async function groupTagsIntoMilestones(
+  input: { repo: RepoMeta; timeline: TagTimeline; targetMilestones?: number },
+  opts: GenerateOptions,
+): Promise<PlannedMilestone[]> {
+  const { repo, timeline } = input;
+  const orderedNames = timeline.tags.map((t) => t.name);
+  const subjectsByTag = new Map(timeline.tags.map((t) => [t.name, t.subjects]));
+  const indexByTag = new Map(orderedNames.map((n, i) => [n, i]));
+  const target =
+    input.targetMilestones && input.targetMilestones > 0
+      ? input.targetMilestones
+      : defaultMilestoneCount(orderedNames.length);
+
+  const text = await complete(
+    GROUPING_SYSTEM_PROMPT,
+    buildGroupingPrompt(repo, timeline, target),
+    opts,
+  );
+  const parsed = parseJsonObject(text) as {
+    milestones?: { title?: string; summary?: string; tags?: string[] }[];
+  };
+  const groups = parsed.milestones ?? [];
+  if (groups.length === 0) {
+    throw new Error("The AI returned no milestones. Try regenerating the plan.");
+  }
+
+  const out: PlannedMilestone[] = [];
+  const seen = new Set<string>();
+  for (const g of groups) {
+    const tags = (g.tags ?? [])
+      .filter((t) => indexByTag.has(t) && !seen.has(t))
+      .sort((a, b) => (indexByTag.get(a)! - indexByTag.get(b)!));
+    if (tags.length === 0) continue;
+    for (const t of tags) seen.add(t);
+    const headTag = tags[tags.length - 1];
+    const firstIdx = indexByTag.get(tags[0])!;
+    const baseTag = firstIdx > 0 ? orderedNames[firstIdx - 1] : null;
+    const commitCount = tags.reduce(
+      (n, t) => n + (subjectsByTag.get(t)?.length ?? 0),
+      0,
+    );
+    out.push({
+      title: (g.title ?? headTag).trim(),
+      summary: (g.summary ?? "").trim(),
+      tags,
+      baseTag,
+      headTag,
+      rangeLabel: baseTag ? `${baseTag} → ${headTag}` : `up to ${headTag}`,
+      commitCount,
+    });
+  }
+
+  // Sweep any tags the model dropped into a trailing milestone so coverage
+  // stays complete.
+  const leftover = orderedNames.filter((n) => !seen.has(n));
+  if (leftover.length > 0) {
+    const firstIdx = indexByTag.get(leftover[0])!;
+    const baseTag = firstIdx > 0 ? orderedNames[firstIdx - 1] : null;
+    const headTag = leftover[leftover.length - 1];
+    out.push({
+      title: "Final polish & wrap-up",
+      summary: "Remaining refinements and finishing touches before handover.",
+      tags: leftover,
+      baseTag,
+      headTag,
+      rangeLabel: baseTag ? `${baseTag} → ${headTag}` : `up to ${headTag}`,
+      commitCount: leftover.reduce(
+        (n, t) => n + (subjectsByTag.get(t)?.length ?? 0),
+        0,
+      ),
+    });
+  }
+
+  return out;
 }

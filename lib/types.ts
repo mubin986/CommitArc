@@ -162,3 +162,82 @@ export interface GhStatus {
   account: string | null;
   message: string;
 }
+
+// ---------------------------------------------------------------------------
+// Campaigns — phased rollout of a finished project's tags to a client.
+//
+// A campaign takes a repo's tag history, lets the AI cluster contiguous tags
+// into themed "milestones", schedules those milestones across a future window,
+// and generates a client-facing deck per milestone on demand.
+// ---------------------------------------------------------------------------
+
+/** How milestone show-dates are computed. */
+export type ScheduleMode = "autoDistribute" | "cadence" | "manual";
+
+export type MilestoneStatus = "upcoming" | "shown";
+
+/** A tag plus the commit info we resolved for it (for ordering/bucketing). */
+export interface TimelineTag {
+  name: string;
+  sha: string;
+  date: string | null;
+}
+
+/** A tag with the commit subjects attributed to it — input to AI grouping. */
+export interface TaggedWork {
+  name: string;
+  date: string | null;
+  /** Commit subjects delivered up to this tag (since the previous tag). */
+  subjects: string[];
+}
+
+/** The repo's tag timeline, ready to feed to the grouping prompt. */
+export interface TagTimeline {
+  tags: TaggedWork[];
+  truncated: boolean;
+}
+
+/** A grouping the AI proposes — before scheduling/persistence. */
+export interface PlannedMilestone {
+  title: string;
+  summary: string;
+  /** Tag names in this group, chronological. */
+  tags: string[];
+  /** Tag immediately before the group (range base); null = repo start. */
+  baseTag: string | null;
+  /** Last tag in the group (the range head). */
+  headTag: string;
+  rangeLabel: string;
+  commitCount: number;
+}
+
+export interface Milestone extends PlannedMilestone {
+  id: string;
+  /** yyyy-mm-dd — when to show this milestone to the client. */
+  scheduledDate: string;
+  status: MilestoneStatus;
+  /** Client-facing deck type to generate for this milestone. */
+  reportType: ReportType;
+  /** Generated on demand; null until the user builds it. */
+  report: ReportContent | null;
+}
+
+export interface CampaignSummary {
+  id: string;
+  savedAt: number;
+  repoFullName: string; // lowercase, for matching
+  repoName: string; // original case, for display
+  repoUrl: string;
+  usePrivate: boolean;
+  scheduleMode: ScheduleMode;
+  startDate: string;
+  endDate?: string;
+  cadenceDays?: number;
+  milestoneCount: number;
+  shownCount: number;
+}
+
+export interface Campaign extends CampaignSummary {
+  repo: RepoMeta;
+  milestones: Milestone[];
+}

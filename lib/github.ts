@@ -5,6 +5,9 @@ import type {
   CommitInfo,
   GhStatus,
   RepoMeta,
+  TagTimeline,
+  TaggedWork,
+  TimelineTag,
 } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -434,4 +437,133 @@ export async function enrichWithStats(
     Array.from({ length: Math.min(STATS_CONCURRENCY, commits.length) }, worker),
   );
   return { commits: out, statsAvailable: true };
+}
+
+// ---------------------------------------------------------------------------
+// Tag timeline (for campaign planning)
+// ---------------------------------------------------------------------------
+
+const TAG_DETAIL_LIMIT = 150; // resolve dates for at most this many undated tags
+const SUBJECTS_PER_TAG = 12; // cap commit subjects per tag in the grouping input
+
+interface RawTag {
+  name?: string;
+  commit?: { sha?: string };
+}
+
+const subjectOf = (message: string) => message.trim().split("\n")[0].slice(0, 200);
+
+/**
+ * Build the repo's tag timeline: every tag in chronological order, each with
+ * the commit subjects delivered since the previous tag. This is the raw
+ * material the AI groups into milestones. One tags request + the default-branch
+ * commit list (capped); undated tags (outside that window) get a detail fetch.
+ */
+export async function getTagTimeline(
+  owner: string,
+  repo: string,
+  defaultBranch: string,
+  opts: RequestOpts,
+): Promise<TagTimeline> {
+  let tagsRes: { items: unknown[]; truncated: boolean };
+  let commitsRes: { items: unknown[]; truncated: boolean };
+  try {
+    [tagsRes, commitsRes] = await Promise.all([
+      ghPaginated(`repos/${owner}/${repo}/tags`, opts),
+      ghPaginated(
+        `repos/${owner}/${repo}/commits?sha=${encodeURIComponent(defaultBranch)}`,
+        opts,
+      ),
+    ]);
+  } catch (e) {
+    const err = e as GitHubError;
+    if (err.status === 404 && !opts.useGh) {
+      err.hint =
+        "Repo not found. If it's private, enable the private-repo option, or set GITHUB_TOKEN.";
+    } else if (err.status === 401 || err.status === 403) {
+      err.hint =
+        "Authentication failed. Check GITHUB_TOKEN or run `gh auth login`.";
+    }
+    throw err;
+  }
+
+  const rawTags = (tagsRes.items as RawTag[])
+    .map((t) => ({ name: t.name, sha: t.commit?.sha }))
+    .filter((t): t is { name: string; sha: string } =>
+      Boolean(t.name && t.sha),
+    );
+  if (rawTags.length === 0) {
+    throw new GitHubError(
+      "This repository has no tags. Campaigns group a project's release tags — tag your releases first.",
+    );
+  }
+
+  // Default-branch commits give us dates + subjects for shas in the window.
+  const commits = (commitsRes.items as RawCommit[]).map(mapCommit);
+  const dateBySha = new Map<string, string>();
+  for (const c of commits) if (c.date) dateBySha.set(c.sha, c.date);
+
+  // Resolve dates for tags whose commit fell outside the listed window.
+  const tags: TimelineTag[] = rawTags.map((t) => ({
+    name: t.name,
+    sha: t.sha,
+    date: dateBySha.get(t.sha) ?? null,
+  }));
+  const undated = tags.filter((t) => !t.date).slice(0, TAG_DETAIL_LIMIT);
+  let next = 0;
+  async function resolveWorker() {
+    while (next < undated.length) {
+      const t = undated[next++];
+      try {
+        const detail = (await ghRequest(
+          `repos/${owner}/${repo}/commits/${t.sha}`,
+          opts,
+        )) as RawCommit;
+        t.date =
+          detail.commit?.author?.date ?? detail.commit?.committer?.date ?? null;
+      } catch {
+        /* leave undated */
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(STATS_CONCURRENCY, undated.length) }, resolveWorker),
+  );
+
+  // Oldest → newest. Undated tags sort last, preserving their listed order.
+  const ordered = [...tags].sort((a, b) => {
+    if (a.date && b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+    if (a.date) return -1;
+    if (b.date) return 1;
+    return 0;
+  });
+
+  // Bucket commit subjects into the half-open window (prevTagDate, tagDate].
+  const dated = commits
+    .filter((c) => c.date)
+    .map((c) => ({ date: c.date, subject: subjectOf(c.message) }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  const work: TaggedWork[] = [];
+  let prevDate: string | null = null;
+  let cursor = 0;
+  for (const tag of ordered) {
+    const subjects: string[] = [];
+    if (tag.date) {
+      while (cursor < dated.length && dated[cursor].date <= tag.date) {
+        if (prevDate === null || dated[cursor].date > prevDate) {
+          subjects.push(dated[cursor].subject);
+        }
+        cursor++;
+      }
+      prevDate = tag.date;
+    }
+    work.push({
+      name: tag.name,
+      date: tag.date,
+      subjects: subjects.slice(0, SUBJECTS_PER_TAG),
+    });
+  }
+
+  return { tags: work, truncated: tagsRes.truncated || commitsRes.truncated };
 }

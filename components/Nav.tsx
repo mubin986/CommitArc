@@ -54,6 +54,7 @@ export default function Nav() {
         </Link>
         <div className="flex items-center gap-1">
           {link("/", "New analysis")}
+          {link("/campaigns", "Campaigns")}
           {link("/history", "History")}
           <a
             href={REPO_URL}
